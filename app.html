@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GelPoint - when is your jam done?</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:#1f1519; color:#f3ede6; line-height:1.5; }
+  .wrap { max-width:700px; margin:0 auto; padding:26px 16px 50px; }
+  h1 { font-size:28px; } h1 span { color:#ff6f91; }
+  .sub { color:#b5aa9c; margin:6px 0 16px; }
+  .card { background:#2e2026; border-radius:14px; padding:14px; margin-bottom:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; }
+  label { font-size:12px; color:#b5aa9c; display:block; margin-bottom:3px; }
+  input,select { width:100%; background:#1f1519; color:#f3ede6; border:1px solid #574f48; border-radius:8px; padding:8px; font-size:15px; font-family:inherit; }
+  button { background:#4d3340; color:#f3ede6; border:0; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:14px; margin-right:6px; margin-top:10px; }
+  table { width:100%; border-collapse:collapse; } td,th { text-align:left; padding:8px 4px; border-bottom:1px solid #433c36; } th { font-size:12px; color:#b5aa9c; font-weight:600; }
+  td.v { font-size:22px; font-weight:800; color:#ff6f91; } tr.me td.v { color:#f3ede6; }
+  .stats { display:flex; gap:22px; flex-wrap:wrap; margin-top:12px; } .stats b { display:block; font-size:20px; } .muted { color:#b5aa9c; font-size:13px; }
+  .err { color:#ff9c8a; } .note { font-size:12.5px; color:#8c8174; margin-top:6px; }
+
+  td.v { font-size:20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Gel<span>Point</span></h1>
+  <div class="sub">The temperature your jam needs to reach, for where you live.</div>
+  <div class="card">
+    <div class="grid">
+      <div><label>Start from</label><select id="mode"><option value="alt">My altitude</option><option value="boil">My thermometer in boiling water</option></select></div>
+      <div><label id="vl">Altitude</label><input id="v" value="0"></div>
+      <div><label>Unit</label><select id="unit"></select></div>
+      <div><label>Jam reads now (optional)</label><input id="now" value=""></div>
+      <div><label>Jam thermometer unit</label><select id="tu"><option value="F">F</option><option value="C">C</option></select></div>
+    </div>
+    <button id="p1">Sea level</button><button id="p2">3,000 ft</button><button id="p3">98 C boiling water</button><button id="p4">1,500 m</button>
+  </div>
+  <div class="card" id="out"></div>
+  <div class="note">Sources: NCHFP (University of Georgia), temperature test table for jelly without added pectin: 220 F at sea level, 218 at 1,000 ft, 216, 214, 212, 211, 209, 207, 205 at 8,000 ft; values between are interpolated. UC ANR: the gel point is 8 F above the boiling point of water. Process times from the NCHFP jam table for half-pint and pint jars, hot pack: 5 min up to 1,000 ft, 10 min to 6,000 ft, 15 min above. Altitude changes with weather too, so the most reliable method is to boil water in the same pot and add 8 F (4.4 C). Always follow a tested recipe for canning times and acidity. Runs in your browser, nothing stored.</div>
+</div>
+<script src="engine.js"></script>
+<script>
+(function () {
+  var G = window.GelPoint, $ = function (i) { return document.getElementById(i); };
+  function f(x, d) { return x.toFixed(d); }
+  var UNITS = { alt: [['ft', 'feet'], ['m', 'metres']], boil: [['F', 'F'], ['C', 'C']] };
+  function fill(mode, sel) { var u = $('unit'); u.innerHTML = ''; UNITS[mode].forEach(function (p) { var o = document.createElement('option'); o.value = p[0]; o.textContent = p[1]; u.appendChild(o); }); if (sel) u.value = sel; $('vl').textContent = mode === 'alt' ? 'Altitude' : 'Boiling water reads'; }
+  function render() {
+    var mode = $('mode').value, nv = $('now').value.trim();
+    var r = G.analyze(mode, parseFloat($('v').value), $('unit').value, nv === '' ? null : parseFloat(nv), $('tu').value);
+    if (!r) { $('out').innerHTML = '<div class="err">' + (mode === 'alt' ? 'Enter an altitude from 0 to 8,000 ft (2,438 m), the range of the NCHFP table.' : 'Enter a boiling-water reading between 180 and 215 F (82 to 102 C).') + '</div>'; return; }
+    var extra = '';
+    if (r.toGoF !== null) { var tg = $('tu').value === 'C' ? f(r.toGoC, 1) + ' C' : f(r.toGoF, 1) + ' F'; extra = r.toGoF > 0.05 ? '<div class="stats"><div><span class="muted">Still to go</span><b>' + tg + '</b></div></div>' : '<div class="stats"><div><span class="muted">Status</span><b>At or past the gel point</b></div></div>'; }
+    $('out').innerHTML = '<table><tr><th>Gel point</th><th>F</th><th>C</th></tr><tr><td>Take the jam off the heat at</td><td class="v">' + f(r.gelF, 1) + '</td><td class="v">' + f(r.gelC, 1) + '</td></tr></table>' + extra +
+      (r.minutes !== null ? '<div class="stats"><div><span class="muted">Jar processing (half-pints and pints, hot pack)</span><b>' + r.minutes + ' min</b></div><div><span class="muted">Your altitude</span><b>' + Math.round(r.ft).toLocaleString('en-US') + ' ft</b></div></div>' : '<div class="note">Boiling water at ' + f(r.boilF, 1) + ' F plus 8 F. Jar processing times depend on altitude, which this mode does not know.</div>');
+  }
+  function set(mode, v, u) { $('mode').value = mode; fill(mode, u); $('v').value = v; render(); }
+  $('mode').onchange = function () { fill(this.value); $('v').value = this.value === 'alt' ? '0' : '212'; render(); };
+  ['v', 'now'].forEach(function (i) { $(i).oninput = render; }); ['unit', 'tu'].forEach(function (i) { $(i).onchange = render; });
+  $('p1').onclick = function () { set('alt', 0, 'ft'); }; $('p2').onclick = function () { set('alt', 3000, 'ft'); }; $('p3').onclick = function () { set('boil', 98, 'C'); }; $('p4').onclick = function () { set('alt', 1500, 'm'); };
+  fill('alt'); render();
+})();
+</script>
+</body>
+</html>
